@@ -164,6 +164,48 @@
     .cup-block{ flex-direction:row; }
   }
 
+  /* ---------- Login ---------- */
+  .hidden{ display:none !important; }
+  .login-screen{
+    min-height: 80vh; display:flex; align-items:center; justify-content:center; padding: 20px;
+  }
+  .login-card{
+    width:100%; max-width: 360px; background: var(--bg-panel); border:1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 24px;
+  }
+  .login-card h1{ font-size:24px; margin: 4px 0 6px; }
+  .login-card p{ color: var(--cream-dim); font-size:13.5px; margin: 0 0 20px; }
+  .login-card form{ display:flex; flex-direction:column; gap:14px; }
+  .login-card .field input{ width:100%; padding:10px 11px; font-size:15px; }
+  .login-card .btn{ width:100%; padding:11px; font-size:15px; margin-top:4px; }
+  input::placeholder{ color: var(--cream-dim); opacity: 0.85; }
+  .login-error{
+    margin-top:14px; background: var(--warn-bg); color: var(--warn); border-radius:6px;
+    padding:10px 12px; font-size:13px; line-height:1.4;
+  }
+
+  /* ---------- User row / uid badge ---------- */
+  .user-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 18px;
+  }
+  .user-info{ font-size:14px; color: var(--cream-dim); }
+  .user-info strong{ color: var(--cream); }
+  .link-btn{
+    background:none; border:none; color: var(--cream-dim); text-decoration:underline;
+    cursor:pointer; font-size:13px; font-family: inherit; padding:0;
+  }
+  .link-btn:hover{ color: var(--cream); }
+  .btn.small{ padding: 6px 12px; font-size:12.5px; }
+  .uid-badge{
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px; background: rgba(217,165,72,0.1);
+    border:1px solid var(--amber-dim); color: var(--cream); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 22px; font-size: 13px;
+  }
+  .uid-badge code{
+    background: var(--bg-panel-2); border:1px solid var(--line); border-radius:5px;
+    padding: 4px 8px; font-size: 12.5px; color: var(--amber); word-break: break-all;
+  }
+
   /* ---------- Tabela em formato de cartão no celular ---------- */
   @media (max-width: 720px){
     .add-form{ flex-direction:column; align-items:stretch; }
@@ -199,15 +241,49 @@
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <div class="top">
+<!-- TELA DE LOGIN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="eyebrow">Controle do Chá</div>
+    <h1>Entrar</h1>
+    <p>Digite seu nome completo e sua idade. Se for a primeira vez, sua conta é criada na hora, com esses mesmos dados — guarde-os pra entrar depois.</p>
+    <form id="formLogin">
+      <div class="field">
+        <label for="loginNome">Nome completo</label>
+        <input type="text" id="loginNome" required autocomplete="name" placeholder="Ex: Kauê Andrade">
+      </div>
+      <div class="field">
+        <label for="loginIdade">Idade</label>
+        <input type="number" id="loginIdade" min="1" max="120" required placeholder="Ex: 17">
+      </div>
+      <button class="btn" type="submit" id="loginBtn">Entrar</button>
+    </form>
+    <div class="login-error hidden" id="loginError"></div>
+  </div>
+</div>
+
+<!-- CONTEÚDO DO APP (só aparece depois do login) -->
+<div class="wrap hidden" id="appContent">
+
+  <div class="user-row">
+    <div class="user-info">Olá, <strong id="userNomeLabel"></strong></div>
+    <button class="link-btn" id="logoutBtn">Sair</button>
+  </div>
+
+  <div class="uid-badge hidden" id="uidBadge">
+    <span>⚠️ ADMIN_UID ainda não foi definido no código. Copie o UID abaixo e mande pro Claude preencher:</span>
+    <code id="uidText"></code>
+    <button class="btn small" id="copyUidBtn" type="button">Copiar</button>
+  </div>
+
+  <div class="top" id="topHero">
     <div class="top-text">
       <div class="eyebrow">Venda das bandejas de chá</div>
       <h1>Controle do Chá</h1>
       <p>Acompanhe o dinheiro que a turma te envia via Pix e as suas próprias vendas, tudo em um só lugar.</p>
     </div>
-    <div class="cup-block">
+    <div class="cup-block" id="cupBlock">
       <svg class="cup-svg" viewBox="0 0 78 96" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <clipPath id="cupClip">
@@ -227,7 +303,7 @@
     </div>
   </div>
 
-  <div class="stats">
+  <div class="stats" id="statsAdmin">
     <div class="stat ok">
       <div class="n" id="statRecebido">R$ 0</div>
       <div class="l">Já recebido</div>
@@ -242,17 +318,32 @@
     </div>
   </div>
 
+  <div class="stats hidden" id="statsColega">
+    <div class="stat">
+      <div class="n" id="statMinhasCartoes">0</div>
+      <div class="l">Cartões vendidos por você</div>
+    </div>
+    <div class="stat ok">
+      <div class="n" id="statMinhasRecebido">R$ 0</div>
+      <div class="l">Já recebido</div>
+    </div>
+    <div class="stat warn">
+      <div class="n" id="statMinhasPendente">R$ 0</div>
+      <div class="l">Ainda a receber</div>
+    </div>
+  </div>
+
   <div class="sync-badge" id="syncBadge"><span class="sync-dot"></span><span id="syncText">Carregando…</span></div>
 
-  <div class="meta-row">
+  <div class="meta-row" id="metaRow">
     <span>Meta da turma (opcional):</span>
     <input type="number" id="metaInput" placeholder="ex: 6400" min="0">
     <span>reais</span>
   </div>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="turma">Controle da turma (Pix)</button>
-    <button class="tab-btn" data-tab="vendas">Minhas vendas</button>
+  <div class="tabs" id="tabsBar">
+    <button class="tab-btn active" data-tab="turma" id="tabBtnTurma">Controle da turma (Pix)</button>
+    <button class="tab-btn" data-tab="vendas" id="tabBtnVendas">Minhas vendas</button>
   </div>
 
   <!-- TURMA PANEL -->
@@ -326,18 +417,21 @@
 
   <div class="foot-note">Os dados ficam salvos automaticamente e sincronizados entre os aparelhos conectados.</div>
 </div>
+</div><!-- fim #appContent -->
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, onSnapshot,
+  getFirestore, doc, setDoc, getDoc, onSnapshot,
   enableIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ─────────────────────────────────────────────────────────
-// ⚠️ COLE AQUI as credenciais do seu projeto Firebase.
-// Você pega esses valores no Console do Firebase, em:
-// Configurações do projeto (⚙️) → Geral → "Seus apps" → SDK do Firebase.
+// Credenciais do projeto Firebase (Controle das Bandeijas).
 // ─────────────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyBts4XEhZUEP7qow98PfxuaLq133kya41A",
@@ -347,109 +441,139 @@ const firebaseConfig = {
   messagingSenderId: "182309572185",
   appId: "1:182309572185:web:bc4eaa8e475845d028ab48"
 };
-// Nome do documento onde tudo fica guardado. Se um dia vocês quiserem
-// separar turmas diferentes, é só trocar esse texto em cada cópia do app.
-const DOC_COLLECTION = 'controleCha';
-const DOC_ID = 'estado';
+
 // ─────────────────────────────────────────────────────────
+// ⚠️ UID do administrador (Kauê). Enquanto estiver vazio (''),
+// ninguém é tratado como admin e a faixinha de UID aparece na tela
+// pra você copiar o seu UID e mandar pro Claude preencher aqui.
+// ─────────────────────────────────────────────────────────
+const ADMIN_UID = '';
 
-const firebaseReady = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'COLE_AQUI';
-let db = null;
-let docRef = null;
-let applyingRemote = false; // evita loop: salvar o que acabou de chegar do servidor
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+try{ await enableIndexedDbPersistence(db); }catch(e){ /* modo privado ou várias abas: segue sem cache offline */ }
 
-if(firebaseReady){
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  docRef = doc(db, DOC_COLLECTION, DOC_ID);
-  try{ await enableIndexedDbPersistence(db); }
-  catch(e){ /* modo privado ou várias abas abertas: segue sem cache offline do Firestore, ainda temos o localStorage */ }
-}
+const turmaDocRef = doc(db, 'controleCha', 'turma');
+const oldDocRef = doc(db, 'controleCha', 'estado');
 
 const PRECO_FOLHA = 320;
 const PRECO_CARTAO = 20;
-const STORAGE_KEY = 'cha-turma-config-v1';
 
-let state = { turma: [], vendas: [], meta: 0 };
-let loaded = false;
+let currentUser = null;
+let isAdmin = false;
+let usuarioDocRef = null;
+let applyingRemoteTurma = false;
+let applyingRemoteVendas = false;
+let unsubTurma = null;
+let unsubVendas = null;
+
+let turmaState = { turma: [], meta: 0 };
+let vendasState = { nome: '', vendas: [] };
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function brl(n){ return 'R$ ' + (n||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
 
 function setSyncBadge(mode){
   const badge = document.getElementById('syncBadge');
   const text = document.getElementById('syncText');
   badge.classList.remove('ok','err');
   if(mode === 'ok'){ badge.classList.add('ok'); text.textContent = 'Sincronizado — todos os aparelhos veem o mesmo'; }
-  else if(mode === 'err'){ badge.classList.add('err'); text.textContent = 'Sem conexão — usando cópia salva neste aparelho'; }
-  else if(mode === 'local'){ text.textContent = 'Firebase não configurado — salvando só neste aparelho'; }
+  else if(mode === 'err'){ badge.classList.add('err'); text.textContent = 'Sem conexão — tentando de novo…'; }
   else { text.textContent = 'Carregando…'; }
 }
 
-function applyIncomingState(parsed){
-  applyingRemote = true;
-  state = { turma: parsed.turma || [], vendas: parsed.vendas || [], meta: parsed.meta || 0 };
-  migrateVendas();
-  loaded = true;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); // guarda cópia local também
-  document.getElementById('metaInput').value = state.meta || '';
-  renderAll();
-  applyingRemote = false;
+// ---------- Login: nome+idade -> credenciais fake ----------
+function slugify(nome){
+  return nome
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z\s]/g, '')
+    .replace(/\s+/g, '.')
+    .replace(/\.+/g, '.')
+    .replace(/^\.|\.$/g, '');
+}
+function emailFromNome(nome){
+  const slug = slugify(nome) || 'pessoa';
+  return slug + '@controlecha.app';
+}
+function senhaFromIdade(idade){
+  return 'cha' + idade + 'turma'; // sempre >= 6 caracteres, exigido pelo Firebase Auth
 }
 
-async function loadState(){
-  if(firebaseReady){
-    onSnapshot(docRef, (snap)=>{
-      if(snap.exists()){
-        applyIncomingState(snap.data());
-      } else {
-        loaded = true; // documento ainda não existe no Firebase, começa vazio
-      }
-      setSyncBadge('ok');
-    }, (err)=>{
-      console.error('Erro de sincronização, usando cópia local:', err);
-      setSyncBadge('err');
-      if(!loaded){
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if(raw){ try{ applyIncomingState(JSON.parse(raw)); }catch(e){} }
-        loaded = true;
-      }
-    });
-    // dá um tempinho pro primeiro snapshot chegar; se demorar (offline na primeira vez), usa cache local
-    await new Promise(res=> setTimeout(res, 1200));
-    if(!loaded){
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if(raw){ try{ applyIncomingState(JSON.parse(raw)); }catch(e){} }
-      loaded = true;
-    }
-  } else {
-    setSyncBadge('local');
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      try{
-        const parsed = JSON.parse(raw);
-        state = { turma: parsed.turma || [], vendas: parsed.vendas || [], meta: parsed.meta || 0 };
-      }catch(e){ /* corrompido, mantém padrão */ }
-    }
-    migrateVendas();
-    loaded = true;
-  }
+async function migrarDadosAntigosSeNecessario(uidNovoUsuario, nomeUsuario){
+  // só migra se o documento novo compartilhado ainda não existir
+  const turmaSnap = await getDoc(turmaDocRef);
+  if(turmaSnap.exists()) return;
+  const oldSnap = await getDoc(oldDocRef);
+  if(!oldSnap.exists()) return;
+  const old = oldSnap.data();
+  await setDoc(turmaDocRef, { turma: old.turma || [], meta: old.meta || 0 });
+  const meuDocRef = doc(db, 'usuarios', uidNovoUsuario);
+  await setDoc(meuDocRef, { nome: nomeUsuario, vendas: old.vendas || [] }, { merge: true });
 }
 
-async function saveState(){
-  if(applyingRemote) return; // não reenviar o que acabou de chegar de fora
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); // cache local sempre, mesmo com Firebase
-  if(firebaseReady){
+document.getElementById('formLogin').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const nome = document.getElementById('loginNome').value.trim();
+  const idade = document.getElementById('loginIdade').value.trim();
+  const errBox = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  errBox.classList.add('hidden');
+  if(!nome || !idade) return;
+
+  const email = emailFromNome(nome);
+  const senha = senhaFromIdade(idade);
+  btn.disabled = true; btn.textContent = 'Entrando…';
+
+  try{
+    let cred;
     try{
-      await setDoc(docRef, state);
-      setSyncBadge('ok');
-    }catch(e){
-      console.error('Não sincronizou agora, mas ficou salvo neste aparelho:', e);
-      setSyncBadge('err');
+      cred = await createUserWithEmailAndPassword(auth, email, senha);
+      // conta nova: cria o documento pessoal e roda a migração se for o caso
+      const meuDocRef = doc(db, 'usuarios', cred.user.uid);
+      await setDoc(meuDocRef, { nome, vendas: [] }, { merge: true });
+      await migrarDadosAntigosSeNecessario(cred.user.uid, nome);
+    }catch(errCreate){
+      if(errCreate.code === 'auth/email-already-in-use'){
+        cred = await signInWithEmailAndPassword(auth, email, senha);
+      } else {
+        throw errCreate;
+      }
     }
+    // onAuthStateChanged cuida do resto (mostrar o app)
+  }catch(err){
+    console.error(err);
+    if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials'){
+      errBox.textContent = 'Esse nome já está cadastrado com outra idade. Confira se digitou certo, ou fale com o Kauê.';
+    } else if(err.code === 'auth/invalid-email'){
+      errBox.textContent = 'Digite um nome válido (com letras).';
+    } else {
+      errBox.textContent = 'Não foi possível entrar agora. Verifique sua internet e tente de novo.';
+    }
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
   }
-}
+});
 
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await signOut(auth);
+});
+
+document.getElementById('copyUidBtn').addEventListener('click', ()=>{
+  const text = document.getElementById('uidText').textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn = document.getElementById('copyUidBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Copiado!';
+    setTimeout(()=> btn.textContent = original, 1500);
+  });
+});
+
+// ---------- Regras de negócio (iguais às de antes) ----------
 function turmaEsperado(item){ return item.folhas * PRECO_FOLHA; }
 function turmaStatus(item){
   const esperado = turmaEsperado(item);
@@ -459,47 +583,53 @@ function turmaStatus(item){
 }
 function vendaValor(item){ return Number(item.cartoes||0) * PRECO_CARTAO; }
 
-function migrateVendas(){
-  state.vendas.forEach(item=>{
+function migrateVendas(lista){
+  lista.forEach(item=>{
     if(item.cartoes === undefined && item.quantidade !== undefined){
       const total = Number(item.quantidade) || 0;
       item.folhas = Math.floor(total / 16);
       item.cartoes = total % 16;
     }
     if(item.cartoes === undefined) item.cartoes = 0;
-    if(item.folhas){ item.cartoes += Number(item.folhas) * 16; item.folhas = 0; } // folhas descontinuado: vira cartões
+    if(item.folhas){ item.cartoes += Number(item.folhas) * 16; item.folhas = 0; }
     if(item.entregue === undefined) item.entregue = false;
   });
 }
 
-function computeTotals(){
-  const totalEsperadoTurma = state.turma.reduce((s,i)=> s + turmaEsperado(i), 0);
-  const totalRecebidoTurma = state.turma.reduce((s,i)=> s + (Number(i.recebido)||0), 0);
-  const totalVendasPago = state.vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
-  const totalVendasPendente = state.vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
-  const totalArrecadado = totalRecebidoTurma + totalVendasPago;
-  const totalPendente = (totalEsperadoTurma - totalRecebidoTurma) + totalVendasPendente;
-  const totalCartoes = state.vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0) + state.turma.reduce((s,i)=> s + Number(i.folhas||0)*16, 0);
-  return { totalEsperadoTurma, totalRecebidoTurma, totalVendasPago, totalVendasPendente, totalArrecadado, totalPendente, totalCartoes };
-}
-
+// ---------- Render ----------
 function renderStats(){
-  const t = computeTotals();
-  document.getElementById('figTotal').textContent = brl(t.totalArrecadado);
-  document.getElementById('statRecebido').textContent = brl(t.totalArrecadado);
-  document.getElementById('statPendente').textContent = brl(t.totalPendente);
-  document.getElementById('statCartoes').textContent = t.totalCartoes;
+  if(isAdmin){
+    const totalEsperadoTurma = turmaState.turma.reduce((s,i)=> s + turmaEsperado(i), 0);
+    const totalRecebidoTurma = turmaState.turma.reduce((s,i)=> s + (Number(i.recebido)||0), 0);
+    const totalVendasPago = vendasState.vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    const totalVendasPendente = vendasState.vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    const totalArrecadado = totalRecebidoTurma + totalVendasPago;
+    const totalPendente = (totalEsperadoTurma - totalRecebidoTurma) + totalVendasPendente;
+    const totalCartoes = vendasState.vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0) + turmaState.turma.reduce((s,i)=> s + Number(i.folhas||0)*16, 0);
 
-  const liquid = document.getElementById('liquid');
-  const pctEl = document.getElementById('figPct');
-  if(state.meta && state.meta > 0){
-    const pct = Math.max(0, Math.min(100, (t.totalArrecadado / state.meta) * 100));
-    pctEl.textContent = Math.round(pct) + '% da meta';
-    const fillHeight = (pct/100) * 78;
-    liquid.setAttribute('y', 96 - fillHeight - 8);
+    document.getElementById('figTotal').textContent = brl(totalArrecadado);
+    document.getElementById('statRecebido').textContent = brl(totalArrecadado);
+    document.getElementById('statPendente').textContent = brl(totalPendente);
+    document.getElementById('statCartoes').textContent = totalCartoes;
+
+    const liquid = document.getElementById('liquid');
+    const pctEl = document.getElementById('figPct');
+    if(turmaState.meta && turmaState.meta > 0){
+      const pct = Math.max(0, Math.min(100, (totalArrecadado / turmaState.meta) * 100));
+      pctEl.textContent = Math.round(pct) + '% da meta';
+      const fillHeight = (pct/100) * 78;
+      liquid.setAttribute('y', 96 - fillHeight - 8);
+    } else {
+      pctEl.textContent = '';
+      liquid.setAttribute('y', 96);
+    }
   } else {
-    pctEl.textContent = '';
-    liquid.setAttribute('y', 96);
+    const minhasCartoes = vendasState.vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0);
+    const minhasRecebido = vendasState.vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    const minhasPendente = vendasState.vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    document.getElementById('statMinhasCartoes').textContent = minhasCartoes;
+    document.getElementById('statMinhasRecebido').textContent = brl(minhasRecebido);
+    document.getElementById('statMinhasPendente').textContent = brl(minhasPendente);
   }
 }
 
@@ -507,10 +637,10 @@ function renderTurma(){
   const body = document.getElementById('bodyTurma');
   const empty = document.getElementById('emptyTurma');
   body.innerHTML = '';
-  if(state.turma.length === 0){ empty.style.display = 'block'; return; }
+  if(turmaState.turma.length === 0){ empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  state.turma.forEach(item=>{
+  turmaState.turma.forEach(item=>{
     const esperado = turmaEsperado(item);
     const status = turmaStatus(item);
     const statusLabel = status === 'pago' ? 'Concluído' : status === 'parcial' ? 'Parcial' : 'Pendente';
@@ -531,10 +661,10 @@ function renderVendas(){
   const body = document.getElementById('bodyVendas');
   const empty = document.getElementById('emptyVendas');
   body.innerHTML = '';
-  if(state.vendas.length === 0){ empty.style.display = 'block'; return; }
+  if(vendasState.vendas.length === 0){ empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  state.vendas.forEach(item=>{
+  vendasState.vendas.forEach(item=>{
     const valor = vendaValor(item);
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -550,25 +680,36 @@ function renderVendas(){
   });
 }
 
-function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
-
 function renderAll(){
   renderStats();
-  renderTurma();
+  if(isAdmin) renderTurma();
   renderVendas();
 }
 
-// --- events: add forms ---
+// ---------- Salvar ----------
+async function saveTurma(){
+  if(applyingRemoteTurma || !isAdmin) return;
+  try{ await setDoc(turmaDocRef, turmaState); setSyncBadge('ok'); }
+  catch(e){ console.error(e); setSyncBadge('err'); }
+}
+async function saveVendas(){
+  if(applyingRemoteVendas || !usuarioDocRef) return;
+  try{ await setDoc(usuarioDocRef, vendasState, { merge: true }); setSyncBadge('ok'); }
+  catch(e){ console.error(e); setSyncBadge('err'); }
+}
+
+// ---------- Eventos: formulários ----------
 document.getElementById('formTurma').addEventListener('submit', async (e)=>{
   e.preventDefault();
+  if(!isAdmin) return;
   const nome = document.getElementById('turmaNome').value.trim();
   const folhas = Number(document.getElementById('turmaFolhas').value) || 1;
   if(!nome) return;
-  state.turma.push({ id: uid(), nome, folhas, recebido: 0 });
+  turmaState.turma.push({ id: uid(), nome, folhas, recebido: 0 });
   e.target.reset();
   document.getElementById('turmaFolhas').value = 1;
   renderAll();
-  await saveState();
+  await saveTurma();
 });
 
 document.getElementById('formVendas').addEventListener('submit', async (e)=>{
@@ -579,58 +720,65 @@ document.getElementById('formVendas').addEventListener('submit', async (e)=>{
   if(!nome) return;
   if(cartoes <= 0) return;
   const item = { id: uid(), nome, cartoes, folhas: 0, telefone, pago: false, entregue: false };
-  state.vendas.push(item);
+  vendasState.vendas.push(item);
   e.target.reset();
   document.getElementById('vendaCartoes').value = 0;
   renderAll();
-  await saveState();
+  await saveVendas();
 });
 
-// --- events: inline edits (delegated) ---
+// ---------- Eventos: edição inline ----------
 document.body.addEventListener('change', async (e)=>{
   const t = e.target;
   if(!t.dataset) return;
   const { id, field, type } = t.dataset;
-  if(!id || !field) return;
-  let list = type === 'turma' ? state.turma : type === 'venda' ? state.vendas : null;
-  if(!list) return;
-  const item = list.find(i=> i.id === id);
-  if(!item) return;
-  if(field === 'nome' || field === 'telefone'){
-    item[field] = t.value;
-  } else {
-    item[field] = Number(t.value) || 0;
+  if(id === undefined && t.id === 'metaInput'){
+    if(!isAdmin) return;
+    turmaState.meta = Number(t.value) || 0;
+    renderStats();
+    await saveTurma();
+    return;
   }
-  renderAll();
-  await saveState();
+  if(!id || !field) return;
+  if(type === 'turma'){
+    if(!isAdmin) return;
+    const item = turmaState.turma.find(i=> i.id === id);
+    if(!item) return;
+    item[field] = (field === 'nome') ? t.value : Number(t.value) || 0;
+    renderAll();
+    await saveTurma();
+  } else if(type === 'venda'){
+    const item = vendasState.vendas.find(i=> i.id === id);
+    if(!item) return;
+    if(field === 'nome' || field === 'telefone'){ item[field] = t.value; }
+    else { item[field] = Number(t.value) || 0; }
+    renderAll();
+    await saveVendas();
+  }
 });
 
-// --- events: delete + payment toggle (delegated click) ---
+// ---------- Eventos: excluir / alternar chips ----------
 document.body.addEventListener('click', async (e)=>{
   const t = e.target;
   if(t.dataset && t.dataset.type === 'pagamento'){
-    const id = t.dataset.id;
-    const item = state.vendas.find(i=> i.id === id);
-    if(item){ item.pago = !item.pago; renderAll(); await saveState(); }
+    const item = vendasState.vendas.find(i=> i.id === t.dataset.id);
+    if(item){ item.pago = !item.pago; renderAll(); await saveVendas(); }
     return;
   }
   if(t.dataset && t.dataset.type === 'entrega'){
-    const id = t.dataset.id;
-    const item = state.vendas.find(i=> i.id === id);
-    if(item){ item.entregue = !item.entregue; renderAll(); await saveState(); }
+    const item = vendasState.vendas.find(i=> i.id === t.dataset.id);
+    if(item){ item.entregue = !item.entregue; renderAll(); await saveVendas(); }
     return;
   }
   if(t.classList.contains('del-btn')){
     const id = t.dataset.id;
     const type = t.dataset.type;
-    if(type === 'turma') state.turma = state.turma.filter(i=> i.id !== id);
-    if(type === 'venda') state.vendas = state.vendas.filter(i=> i.id !== id);
-    renderAll();
-    await saveState();
+    if(type === 'turma' && isAdmin){ turmaState.turma = turmaState.turma.filter(i=> i.id !== id); renderAll(); await saveTurma(); }
+    if(type === 'venda'){ vendasState.vendas = vendasState.vendas.filter(i=> i.id !== id); renderAll(); await saveVendas(); }
   }
 });
 
-// --- tabs ---
+// ---------- Abas ----------
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tab-btn').forEach(b=> b.classList.remove('active'));
@@ -640,19 +788,84 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
-// --- meta input ---
-document.getElementById('metaInput').addEventListener('change', async (e)=>{
-  state.meta = Number(e.target.value) || 0;
-  renderStats();
-  await saveState();
-});
+// ---------- Auth: mostra o app certo pra cada pessoa ----------
+function limparListeners(){
+  if(unsubTurma){ unsubTurma(); unsubTurma = null; }
+  if(unsubVendas){ unsubVendas(); unsubVendas = null; }
+}
 
-// --- init ---
-(async function init(){
-  await loadState();
-  document.getElementById('metaInput').value = state.meta || '';
-  renderAll();
-})();
+function mostrarApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('userNomeLabel').textContent = vendasState.nome || currentUser.email;
+
+  const uidBadge = document.getElementById('uidBadge');
+  if(ADMIN_UID === ''){
+    uidBadge.classList.remove('hidden');
+    document.getElementById('uidText').textContent = currentUser.uid;
+  } else {
+    uidBadge.classList.add('hidden');
+  }
+
+  document.getElementById('tabsBar').classList.toggle('hidden', !isAdmin);
+  document.getElementById('cupBlock').classList.toggle('hidden', !isAdmin);
+  document.getElementById('statsAdmin').classList.toggle('hidden', !isAdmin);
+  document.getElementById('statsColega').classList.toggle('hidden', isAdmin);
+  document.getElementById('metaRow').classList.toggle('hidden', !isAdmin);
+
+  // se não for admin, força a aba "Minhas vendas" ativa e some com a de turma
+  if(!isAdmin){
+    document.querySelectorAll('.tab-btn').forEach(b=> b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active'));
+    document.getElementById('tabBtnVendas').classList.add('active');
+    document.getElementById('panel-vendas').classList.add('active');
+  }
+}
+
+function mostrarLogin(){
+  document.getElementById('appContent').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('formLogin').reset();
+}
+
+onAuthStateChanged(auth, async (user)=>{
+  limparListeners();
+  if(!user){
+    currentUser = null;
+    mostrarLogin();
+    return;
+  }
+  currentUser = user;
+  isAdmin = ADMIN_UID !== '' && user.uid === ADMIN_UID;
+  usuarioDocRef = doc(db, 'usuarios', user.uid);
+  setSyncBadge('loading');
+
+  if(isAdmin){
+    unsubTurma = onSnapshot(turmaDocRef, (snap)=>{
+      applyingRemoteTurma = true;
+      const data = snap.exists() ? snap.data() : { turma: [], meta: 0 };
+      turmaState = { turma: data.turma || [], meta: data.meta || 0 };
+      document.getElementById('metaInput').value = turmaState.meta || '';
+      renderAll();
+      setSyncBadge('ok');
+      applyingRemoteTurma = false;
+    }, (err)=>{ console.error(err); setSyncBadge('err'); });
+  }
+
+  unsubVendas = onSnapshot(usuarioDocRef, (snap)=>{
+    applyingRemoteVendas = true;
+    const data = snap.exists() ? snap.data() : { nome: '', vendas: [] };
+    vendasState = { nome: data.nome || '', vendas: data.vendas || [] };
+    migrateVendas(vendasState.vendas);
+    document.getElementById('userNomeLabel').textContent = vendasState.nome || user.email;
+    mostrarApp();
+    renderAll();
+    setSyncBadge('ok');
+    applyingRemoteVendas = false;
+  }, (err)=>{ console.error(err); setSyncBadge('err'); });
+
+  mostrarApp();
+});
 
 // --- registra o service worker (permite instalar como app e abrir offline) ---
 if('serviceWorker' in navigator){
