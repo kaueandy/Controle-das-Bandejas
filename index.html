@@ -179,6 +179,7 @@
   .login-card .field input{ width:100%; padding:10px 11px; font-size:15px; }
   .login-card .btn{ width:100%; padding:11px; font-size:15px; margin-top:4px; }
   input::placeholder{ color: var(--cream-dim); opacity: 0.85; }
+  .panel-hint{ color: var(--cream-dim); font-size:13.5px; margin: 0 0 14px; line-height:1.5; }
   .login-error{
     margin-top:14px; background: var(--warn-bg); color: var(--warn); border-radius:6px;
     padding:10px 12px; font-size:13px; line-height:1.4;
@@ -247,7 +248,7 @@
   <div class="login-card">
     <div class="eyebrow">Controle do Chá</div>
     <h1>Entrar</h1>
-    <p>Digite seu nome completo e sua idade. Se for a primeira vez, sua conta é criada na hora, com esses mesmos dados — guarde-os pra entrar depois.</p>
+    <p>Digite seu nome completo e sua idade. Sua conta precisa já ter sido cadastrada pelo Kauê — se os dados baterem, você entra na hora.</p>
     <form id="formLogin">
       <div class="field">
         <label for="loginNome">Nome completo</label>
@@ -271,11 +272,7 @@
     <button class="link-btn" id="logoutBtn">Sair</button>
   </div>
 
-  <div class="uid-badge hidden" id="uidBadge">
-    <span>⚠️ ADMIN_UID ainda não foi definido no código. Copie o UID abaixo e mande pro Claude preencher:</span>
-    <code id="uidText"></code>
-    <button class="btn small" id="copyUidBtn" type="button">Copiar</button>
-  </div>
+  <div class="uid-badge hidden" id="uidBadge"></div>
 
   <div class="top" id="topHero">
     <div class="top-text">
@@ -344,6 +341,7 @@
   <div class="tabs" id="tabsBar">
     <button class="tab-btn active" data-tab="turma" id="tabBtnTurma">Controle da turma (Pix)</button>
     <button class="tab-btn" data-tab="vendas" id="tabBtnVendas">Minhas vendas</button>
+    <button class="tab-btn" data-tab="colegas" id="tabBtnColegas">Contas dos colegas</button>
   </div>
 
   <!-- TURMA PANEL -->
@@ -415,6 +413,40 @@
     </div>
   </div>
 
+  <!-- COLEGAS PANEL (só admin) -->
+  <div class="panel" id="panel-colegas">
+    <p class="panel-hint">Cadastre aqui cada colega. Sem cadastro, a pessoa não consegue entrar no app — assim ninguém cria conta por conta própria.</p>
+    <form class="add-form" id="formColega">
+      <div class="field f-nome">
+        <label for="colegaNome">Nome completo do(a) colega</label>
+        <input type="text" id="colegaNome" required placeholder="Ex: Luzia Fernandes">
+      </div>
+      <div class="field f-num">
+        <label for="colegaIdade">Idade</label>
+        <input type="number" id="colegaIdade" min="1" max="120" required placeholder="Ex: 17">
+      </div>
+      <button class="btn" type="submit" id="colegaBtn">Cadastrar colega</button>
+    </form>
+    <div class="login-error hidden" id="colegaError"></div>
+    <div class="login-error hidden" id="colegaSucesso" style="background: rgba(122,168,116,0.12); color:#7aa874;"></div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Cartões vendidos</th>
+            <th>Recebido</th>
+            <th>Pendente</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="bodyColegas"></tbody>
+      </table>
+      <div class="empty" id="emptyColegas" style="display:none;">Nenhum colega cadastrado ainda.</div>
+    </div>
+  </div>
+
   <div class="foot-note">Os dados ficam salvos automaticamente e sincronizados entre os aparelhos conectados.</div>
 </div>
 </div><!-- fim #appContent -->
@@ -422,7 +454,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, getDoc, onSnapshot,
+  getFirestore, doc, setDoc, getDoc, deleteDoc, collection, onSnapshot,
   enableIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -443,19 +475,27 @@ const firebaseConfig = {
 };
 
 // ─────────────────────────────────────────────────────────
-// ⚠️ UID do administrador (Kauê). Enquanto estiver vazio (''),
-// ninguém é tratado como admin e a faixinha de UID aparece na tela
-// pra você copiar o seu UID e mandar pro Claude preencher aqui.
+// Código de acesso do admin (Kauê). É o único "nome" que pode
+// criar a própria conta na hora, no primeiro login. Todo mundo
+// mais precisa ser cadastrado por ele na aba "Contas dos colegas".
 // ─────────────────────────────────────────────────────────
-const ADMIN_UID = '';
+const ADMIN_SLUG = 'adminkaue';
+const ADMIN_NOME_EXIBIDO = 'Kauê';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 try{ await enableIndexedDbPersistence(db); }catch(e){ /* modo privado ou várias abas: segue sem cache offline */ }
 
+// App secundário: usado só pra criar contas de colegas sem tirar o admin
+// da própria sessão (o Firebase Auth do navegador desloga quem está logado
+// sempre que uma conta nova é criada na instância principal).
+const secondaryApp = initializeApp(firebaseConfig, 'Secundario');
+const secondaryAuth = getAuth(secondaryApp);
+
 const turmaDocRef = doc(db, 'controleCha', 'turma');
 const oldDocRef = doc(db, 'controleCha', 'estado');
+const usuariosColRef = collection(db, 'usuarios');
 
 const PRECO_FOLHA = 320;
 const PRECO_CARTAO = 20;
@@ -467,9 +507,11 @@ let applyingRemoteTurma = false;
 let applyingRemoteVendas = false;
 let unsubTurma = null;
 let unsubVendas = null;
+let unsubColegas = null;
 
 let turmaState = { turma: [], meta: 0 };
 let vendasState = { nome: '', vendas: [] };
+let colegasState = []; // [{ id, nome, vendas: [...] }] — só carregado pro admin
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function brl(n){ return 'R$ ' + (n||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
@@ -503,7 +545,7 @@ function senhaFromIdade(idade){
   return 'cha' + idade + 'turma'; // sempre >= 6 caracteres, exigido pelo Firebase Auth
 }
 
-async function migrarDadosAntigosSeNecessario(uidNovoUsuario, nomeUsuario){
+async function migrarDadosAntigosSeNecessario(uidAdmin){
   // só migra se o documento novo compartilhado ainda não existir
   const turmaSnap = await getDoc(turmaDocRef);
   if(turmaSnap.exists()) return;
@@ -511,10 +553,11 @@ async function migrarDadosAntigosSeNecessario(uidNovoUsuario, nomeUsuario){
   if(!oldSnap.exists()) return;
   const old = oldSnap.data();
   await setDoc(turmaDocRef, { turma: old.turma || [], meta: old.meta || 0 });
-  const meuDocRef = doc(db, 'usuarios', uidNovoUsuario);
-  await setDoc(meuDocRef, { nome: nomeUsuario, vendas: old.vendas || [] }, { merge: true });
+  const meuDocRef = doc(db, 'usuarios', uidAdmin);
+  await setDoc(meuDocRef, { nome: ADMIN_NOME_EXIBIDO, vendas: old.vendas || [] }, { merge: true });
 }
 
+// ---------- Formulário de login (todo mundo, exceto cadastro do admin) ----------
 document.getElementById('formLogin').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const nome = document.getElementById('loginNome').value.trim();
@@ -524,6 +567,7 @@ document.getElementById('formLogin').addEventListener('submit', async (e)=>{
   errBox.classList.add('hidden');
   if(!nome || !idade) return;
 
+  const ehAdmin = slugify(nome) === ADMIN_SLUG;
   const email = emailFromNome(nome);
   const senha = senhaFromIdade(idade);
   btn.disabled = true; btn.textContent = 'Entrando…';
@@ -531,23 +575,32 @@ document.getElementById('formLogin').addEventListener('submit', async (e)=>{
   try{
     let cred;
     try{
-      cred = await createUserWithEmailAndPassword(auth, email, senha);
-      // conta nova: cria o documento pessoal e roda a migração se for o caso
+      cred = await signInWithEmailAndPassword(auth, email, senha);
+      // conta já existia — se por algum motivo não tiver documento pessoal, recria vazio
       const meuDocRef = doc(db, 'usuarios', cred.user.uid);
-      await setDoc(meuDocRef, { nome, vendas: [] }, { merge: true });
-      await migrarDadosAntigosSeNecessario(cred.user.uid, nome);
-    }catch(errCreate){
-      if(errCreate.code === 'auth/email-already-in-use'){
-        cred = await signInWithEmailAndPassword(auth, email, senha);
+      const meuSnap = await getDoc(meuDocRef);
+      if(!meuSnap.exists()){
+        await setDoc(meuDocRef, { nome: ehAdmin ? ADMIN_NOME_EXIBIDO : nome, vendas: [] });
+      }
+    }catch(errSignIn){
+      const podeCriarNaHora = ehAdmin && (
+        errSignIn.code === 'auth/user-not-found' ||
+        errSignIn.code === 'auth/invalid-credential' ||
+        errSignIn.code === 'auth/invalid-login-credentials'
+      );
+      if(podeCriarNaHora){
+        cred = await createUserWithEmailAndPassword(auth, email, senha);
+        await setDoc(doc(db, 'usuarios', cred.user.uid), { nome: ADMIN_NOME_EXIBIDO, vendas: [] }, { merge: true });
+        await migrarDadosAntigosSeNecessario(cred.user.uid);
       } else {
-        throw errCreate;
+        throw { code: 'conta-nao-liberada' };
       }
     }
     // onAuthStateChanged cuida do resto (mostrar o app)
   }catch(err){
     console.error(err);
-    if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials'){
-      errBox.textContent = 'Esse nome já está cadastrado com outra idade. Confira se digitou certo, ou fale com o Kauê.';
+    if(err.code === 'conta-nao-liberada'){
+      errBox.textContent = 'Nome ou idade não conferem, ou essa conta ainda não foi cadastrada. Peça pro Kauê cadastrar você primeiro.';
     } else if(err.code === 'auth/invalid-email'){
       errBox.textContent = 'Digite um nome válido (com letras).';
     } else {
@@ -563,14 +616,46 @@ document.getElementById('logoutBtn').addEventListener('click', async ()=>{
   await signOut(auth);
 });
 
-document.getElementById('copyUidBtn').addEventListener('click', ()=>{
-  const text = document.getElementById('uidText').textContent;
-  navigator.clipboard.writeText(text).then(()=>{
-    const btn = document.getElementById('copyUidBtn');
-    const original = btn.textContent;
-    btn.textContent = 'Copiado!';
-    setTimeout(()=> btn.textContent = original, 1500);
-  });
+// ---------- Painel do admin: cadastrar colega ----------
+document.getElementById('formColega').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if(!isAdmin) return;
+  const nome = document.getElementById('colegaNome').value.trim();
+  const idade = document.getElementById('colegaIdade').value.trim();
+  const errBox = document.getElementById('colegaError');
+  const okBox = document.getElementById('colegaSucesso');
+  const btn = document.getElementById('colegaBtn');
+  errBox.classList.add('hidden');
+  okBox.classList.add('hidden');
+  if(!nome || !idade) return;
+  if(slugify(nome) === ADMIN_SLUG){
+    errBox.textContent = 'Esse nome é reservado pra conta do admin. Use outro nome.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const email = emailFromNome(nome);
+  const senha = senhaFromIdade(idade);
+  btn.disabled = true; btn.textContent = 'Cadastrando…';
+
+  try{
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
+    await setDoc(doc(db, 'usuarios', cred.user.uid), { nome, vendas: [] });
+    await signOut(secondaryAuth);
+    okBox.textContent = `Conta de "${nome}" cadastrada! Já pode passar o nome completo e a idade (${idade}) pra pessoa entrar.`;
+    okBox.classList.remove('hidden');
+    e.target.reset();
+  }catch(err){
+    console.error(err);
+    if(err.code === 'auth/email-already-in-use'){
+      errBox.textContent = 'Já existe uma conta cadastrada com esse nome.';
+    } else {
+      errBox.textContent = 'Não foi possível cadastrar agora. Verifique a internet e tente de novo.';
+    }
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Cadastrar colega';
+  }
 });
 
 // ---------- Regras de negócio (iguais às de antes) ----------
@@ -680,9 +765,34 @@ function renderVendas(){
   });
 }
 
+function renderColegas(){
+  const body = document.getElementById('bodyColegas');
+  const empty = document.getElementById('emptyColegas');
+  if(!body) return;
+  body.innerHTML = '';
+  if(colegasState.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  colegasState.forEach(pessoa=>{
+    const vendas = pessoa.vendas || [];
+    const cartoes = vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0);
+    const recebido = vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    const pendente = vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td data-label="Nome">${escapeAttr(pessoa.nome || '(sem nome)')}</td>
+      <td data-label="Cartões vendidos">${cartoes}</td>
+      <td data-label="Recebido" class="valor">${brl(recebido)}</td>
+      <td data-label="Pendente" class="valor">${brl(pendente)}</td>
+      <td class="td-actions"><button class="del-btn" data-id="${pessoa.id}" data-type="colega" title="Remover cadastro">×</button></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
 function renderAll(){
   renderStats();
-  if(isAdmin) renderTurma();
+  if(isAdmin){ renderTurma(); renderColegas(); }
   renderVendas();
 }
 
@@ -775,6 +885,11 @@ document.body.addEventListener('click', async (e)=>{
     const type = t.dataset.type;
     if(type === 'turma' && isAdmin){ turmaState.turma = turmaState.turma.filter(i=> i.id !== id); renderAll(); await saveTurma(); }
     if(type === 'venda'){ vendasState.vendas = vendasState.vendas.filter(i=> i.id !== id); renderAll(); await saveVendas(); }
+    if(type === 'colega' && isAdmin){
+      if(confirm('Remover o cadastro dessa pessoa? As vendas dela serão apagadas (o login dela deixa de funcionar até você cadastrar de novo).')){
+        await deleteDoc(doc(db, 'usuarios', id));
+      }
+    }
   }
 });
 
@@ -792,20 +907,13 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 function limparListeners(){
   if(unsubTurma){ unsubTurma(); unsubTurma = null; }
   if(unsubVendas){ unsubVendas(); unsubVendas = null; }
+  if(unsubColegas){ unsubColegas(); unsubColegas = null; }
 }
 
 function mostrarApp(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
-  document.getElementById('userNomeLabel').textContent = vendasState.nome || currentUser.email;
-
-  const uidBadge = document.getElementById('uidBadge');
-  if(ADMIN_UID === ''){
-    uidBadge.classList.remove('hidden');
-    document.getElementById('uidText').textContent = currentUser.uid;
-  } else {
-    uidBadge.classList.add('hidden');
-  }
+  document.getElementById('userNomeLabel').textContent = vendasState.nome || (isAdmin ? ADMIN_NOME_EXIBIDO : currentUser.email);
 
   document.getElementById('tabsBar').classList.toggle('hidden', !isAdmin);
   document.getElementById('cupBlock').classList.toggle('hidden', !isAdmin);
@@ -813,7 +921,7 @@ function mostrarApp(){
   document.getElementById('statsColega').classList.toggle('hidden', isAdmin);
   document.getElementById('metaRow').classList.toggle('hidden', !isAdmin);
 
-  // se não for admin, força a aba "Minhas vendas" ativa e some com a de turma
+  // se não for admin, força a aba "Minhas vendas" ativa e some com as outras
   if(!isAdmin){
     document.querySelectorAll('.tab-btn').forEach(b=> b.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p=> p.classList.remove('active'));
@@ -836,7 +944,7 @@ onAuthStateChanged(auth, async (user)=>{
     return;
   }
   currentUser = user;
-  isAdmin = ADMIN_UID !== '' && user.uid === ADMIN_UID;
+  isAdmin = user.email === emailFromNome(ADMIN_SLUG);
   usuarioDocRef = doc(db, 'usuarios', user.uid);
   setSyncBadge('loading');
 
@@ -850,6 +958,15 @@ onAuthStateChanged(auth, async (user)=>{
       setSyncBadge('ok');
       applyingRemoteTurma = false;
     }, (err)=>{ console.error(err); setSyncBadge('err'); });
+
+    unsubColegas = onSnapshot(usuariosColRef, (snap)=>{
+      colegasState = [];
+      snap.forEach(d=>{
+        if(d.id === user.uid) return; // não lista a própria conta do admin
+        colegasState.push({ id: d.id, ...d.data() });
+      });
+      renderColegas();
+    }, (err)=> console.error(err));
   }
 
   unsubVendas = onSnapshot(usuarioDocRef, (snap)=>{
@@ -857,7 +974,7 @@ onAuthStateChanged(auth, async (user)=>{
     const data = snap.exists() ? snap.data() : { nome: '', vendas: [] };
     vendasState = { nome: data.nome || '', vendas: data.vendas || [] };
     migrateVendas(vendasState.vendas);
-    document.getElementById('userNomeLabel').textContent = vendasState.nome || user.email;
+    document.getElementById('userNomeLabel').textContent = vendasState.nome || (isAdmin ? ADMIN_NOME_EXIBIDO : user.email);
     mostrarApp();
     renderAll();
     setSyncBadge('ok');
