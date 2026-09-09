@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kaueandy.github.io/Controle-das-Bandeijas/sitemap.xml
