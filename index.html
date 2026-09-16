@@ -140,6 +140,16 @@ input::placeholder{color:var(--cream-dim);opacity:.7}.panel-hint{color:var(--cre
 .meta-row input,.login-card .field input{background:var(--bg-panel-2);color:var(--cream);border-color:var(--line);}
 thead th{background:var(--bg-panel-2);color:var(--cream-dim);}
 tbody td{color:var(--cream);}
+
+/* No celular: fundo uniforme para evitar a diferença de tonalidade entre login e app.
+   No computador, os gradientes originais continuam ativos. */
+@media (max-width: 720px){
+  html, body, #appContent{
+    background: var(--bg) !important;
+    background-image: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
