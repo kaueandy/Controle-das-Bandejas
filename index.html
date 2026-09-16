@@ -303,19 +303,20 @@
   <div class="stats" id="statsAdmin">
     <div class="stat ok">
       <div class="n" id="statRecebido">R$ 0</div>
-      <div class="l">Já recebido</div>
+      <div class="l">Já recebido (todos)</div>
     </div>
     <div class="stat warn">
       <div class="n" id="statPendente">R$ 0</div>
-      <div class="l">Ainda a receber</div>
+      <div class="l">Ainda a receber (todos)</div>
     </div>
     <div class="stat">
       <div class="n" id="statCartoes">0</div>
-      <div class="l">Cartões vendidos (turma + você)</div>
+      <div class="l">Cartões vendidos (todos)</div>
     </div>
   </div>
 
-  <div class="stats hidden" id="statsColega">
+  <p class="panel-hint" id="statsColegaHint">Só as suas vendas:</p>
+  <div class="stats" id="statsColega">
     <div class="stat">
       <div class="n" id="statMinhasCartoes">0</div>
       <div class="l">Cartões vendidos por você</div>
@@ -339,45 +340,12 @@
   </div>
 
   <div class="tabs" id="tabsBar">
-    <button class="tab-btn active" data-tab="turma" id="tabBtnTurma">Controle da turma (Pix)</button>
-    <button class="tab-btn" data-tab="vendas" id="tabBtnVendas">Minhas vendas</button>
+    <button class="tab-btn active" data-tab="vendas" id="tabBtnVendas">Minhas vendas</button>
     <button class="tab-btn" data-tab="colegas" id="tabBtnColegas">Contas dos colegas</button>
   </div>
 
-  <!-- TURMA PANEL -->
-  <div class="panel active" id="panel-turma">
-    <form class="add-form" id="formTurma">
-      <div class="field f-nome">
-        <label for="turmaNome">Nome do(a) colega</label>
-        <input type="text" id="turmaNome" required>
-      </div>
-      <div class="field f-num">
-        <label for="turmaFolhas">Folhas (16 un.)</label>
-        <input type="number" id="turmaFolhas" min="1" value="1" required>
-      </div>
-      <button class="btn" type="submit">Adicionar</button>
-    </form>
-
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>Folhas</th>
-            <th>Esperado</th>
-            <th>Recebido</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="bodyTurma"></tbody>
-      </table>
-      <div class="empty" id="emptyTurma" style="display:none;">Ninguém cadastrado ainda. Adicione os colegas que vão te enviar o Pix.</div>
-    </div>
-  </div>
-
   <!-- VENDAS PANEL -->
-  <div class="panel" id="panel-vendas">
+  <div class="panel active" id="panel-vendas">
     <form class="add-form" id="formVendas">
       <div class="field f-nome">
         <label for="vendaNome">Nome</label>
@@ -511,9 +479,9 @@ let unsubTurma = null;
 let unsubVendas = null;
 let unsubColegas = null;
 
-let turmaState = { turma: [], meta: 0 };
+let turmaState = { meta: 0 }; // só guarda a meta agora — o controle manual de turma foi removido
 let vendasState = { nome: '', vendas: [] };
-let colegasState = []; // [{ id, nome, vendas: [...] }] — só carregado pro admin
+let colegasState = []; // [{ id, nome, vendas: [...] }] — todo mundo, carregado pro admin
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function brl(n){ return 'R$ ' + (n||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
@@ -679,14 +647,7 @@ document.getElementById('formColega').addEventListener('submit', async (e)=>{
   }
 });
 
-// ---------- Regras de negócio (iguais às de antes) ----------
-function turmaEsperado(item){ return item.folhas * PRECO_FOLHA; }
-function turmaStatus(item){
-  const esperado = turmaEsperado(item);
-  if(item.recebido <= 0) return 'pendente';
-  if(item.recebido >= esperado) return 'pago';
-  return 'parcial';
-}
+// ---------- Regras de negócio ----------
 function vendaValor(item){ return Number(item.cartoes||0) * PRECO_CARTAO; }
 
 function migrateVendas(lista){
@@ -704,24 +665,30 @@ function migrateVendas(lista){
 
 // ---------- Render ----------
 function renderStats(){
-  if(isAdmin){
-    const totalEsperadoTurma = turmaState.turma.reduce((s,i)=> s + turmaEsperado(i), 0);
-    const totalRecebidoTurma = turmaState.turma.reduce((s,i)=> s + (Number(i.recebido)||0), 0);
-    const totalVendasPago = vendasState.vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
-    const totalVendasPendente = vendasState.vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
-    const totalArrecadado = totalRecebidoTurma + totalVendasPago;
-    const totalPendente = (totalEsperadoTurma - totalRecebidoTurma) + totalVendasPendente;
-    const totalCartoes = vendasState.vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0) + turmaState.turma.reduce((s,i)=> s + Number(i.folhas||0)*16, 0);
+  // Estatísticas pessoais (sempre calculadas — usadas por todo mundo)
+  const minhasCartoes = vendasState.vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0);
+  const minhasRecebido = vendasState.vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+  const minhasPendente = vendasState.vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+  document.getElementById('statMinhasCartoes').textContent = minhasCartoes;
+  document.getElementById('statMinhasRecebido').textContent = brl(minhasRecebido);
+  document.getElementById('statMinhasPendente').textContent = brl(minhasPendente);
 
-    document.getElementById('figTotal').textContent = brl(totalArrecadado);
-    document.getElementById('statRecebido').textContent = brl(totalArrecadado);
+  if(isAdmin){
+    // Estatísticas globais: soma das vendas de todos os colegas + as suas próprias
+    const todasVendas = [...vendasState.vendas, ...colegasState.flatMap(p=> p.vendas || [])];
+    const totalCartoes = todasVendas.reduce((s,v)=> s + Number(v.cartoes||0), 0);
+    const totalRecebido = todasVendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+    const totalPendente = todasVendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
+
+    document.getElementById('figTotal').textContent = brl(totalRecebido);
+    document.getElementById('statRecebido').textContent = brl(totalRecebido);
     document.getElementById('statPendente').textContent = brl(totalPendente);
     document.getElementById('statCartoes').textContent = totalCartoes;
 
     const liquid = document.getElementById('liquid');
     const pctEl = document.getElementById('figPct');
     if(turmaState.meta && turmaState.meta > 0){
-      const pct = Math.max(0, Math.min(100, (totalArrecadado / turmaState.meta) * 100));
+      const pct = Math.max(0, Math.min(100, (totalRecebido / turmaState.meta) * 100));
       pctEl.textContent = Math.round(pct) + '% da meta';
       const fillHeight = (pct/100) * 78;
       liquid.setAttribute('y', 96 - fillHeight - 8);
@@ -729,38 +696,7 @@ function renderStats(){
       pctEl.textContent = '';
       liquid.setAttribute('y', 96);
     }
-  } else {
-    const minhasCartoes = vendasState.vendas.reduce((s,v)=> s + Number(v.cartoes||0), 0);
-    const minhasRecebido = vendasState.vendas.filter(v=>v.pago).reduce((s,v)=> s + vendaValor(v), 0);
-    const minhasPendente = vendasState.vendas.filter(v=>!v.pago).reduce((s,v)=> s + vendaValor(v), 0);
-    document.getElementById('statMinhasCartoes').textContent = minhasCartoes;
-    document.getElementById('statMinhasRecebido').textContent = brl(minhasRecebido);
-    document.getElementById('statMinhasPendente').textContent = brl(minhasPendente);
   }
-}
-
-function renderTurma(){
-  const body = document.getElementById('bodyTurma');
-  const empty = document.getElementById('emptyTurma');
-  body.innerHTML = '';
-  if(turmaState.turma.length === 0){ empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-
-  turmaState.turma.forEach(item=>{
-    const esperado = turmaEsperado(item);
-    const status = turmaStatus(item);
-    const statusLabel = status === 'pago' ? 'Concluído' : status === 'parcial' ? 'Parcial' : 'Pendente';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td data-label="Nome"><input type="text" value="${escapeAttr(item.nome)}" data-id="${item.id}" data-field="nome" data-type="turma"></td>
-      <td data-label="Folhas"><input type="number" min="1" value="${item.folhas}" data-id="${item.id}" data-field="folhas" data-type="turma"></td>
-      <td data-label="Esperado" class="valor">${brl(esperado)}</td>
-      <td data-label="Recebido"><input type="number" min="0" value="${item.recebido}" data-id="${item.id}" data-field="recebido" data-type="turma"></td>
-      <td data-label="Status"><span class="chip ${status}">${statusLabel}</span></td>
-      <td class="td-actions"><button class="del-btn" data-id="${item.id}" data-type="turma" title="Remover">×</button></td>
-    `;
-    body.appendChild(tr);
-  });
 }
 
 function renderVendas(){
@@ -813,14 +749,14 @@ function renderColegas(){
 
 function renderAll(){
   renderStats();
-  if(isAdmin){ renderTurma(); renderColegas(); }
+  if(isAdmin){ renderColegas(); }
   renderVendas();
 }
 
 // ---------- Salvar ----------
-async function saveTurma(){
+async function saveMeta(){
   if(applyingRemoteTurma || !isAdmin) return;
-  try{ await setDoc(turmaDocRef, turmaState); setSyncBadge('ok'); }
+  try{ await setDoc(turmaDocRef, { meta: turmaState.meta }, { merge: true }); setSyncBadge('ok'); }
   catch(e){ console.error(e); setSyncBadge('err'); }
 }
 async function saveVendas(){
@@ -830,19 +766,6 @@ async function saveVendas(){
 }
 
 // ---------- Eventos: formulários ----------
-document.getElementById('formTurma').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  if(!isAdmin) return;
-  const nome = document.getElementById('turmaNome').value.trim();
-  const folhas = Number(document.getElementById('turmaFolhas').value) || 1;
-  if(!nome) return;
-  turmaState.turma.push({ id: uid(), nome, folhas, recebido: 0 });
-  e.target.reset();
-  document.getElementById('turmaFolhas').value = 1;
-  renderAll();
-  await saveTurma();
-});
-
 document.getElementById('formVendas').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const nome = document.getElementById('vendaNome').value.trim();
@@ -867,18 +790,11 @@ document.body.addEventListener('change', async (e)=>{
     if(!isAdmin) return;
     turmaState.meta = Number(t.value) || 0;
     renderStats();
-    await saveTurma();
+    await saveMeta();
     return;
   }
   if(!id || !field) return;
-  if(type === 'turma'){
-    if(!isAdmin) return;
-    const item = turmaState.turma.find(i=> i.id === id);
-    if(!item) return;
-    item[field] = (field === 'nome') ? t.value : Number(t.value) || 0;
-    renderAll();
-    await saveTurma();
-  } else if(type === 'venda'){
+  if(type === 'venda'){
     const item = vendasState.vendas.find(i=> i.id === id);
     if(!item) return;
     if(field === 'nome' || field === 'telefone'){ item[field] = t.value; }
@@ -904,7 +820,6 @@ document.body.addEventListener('click', async (e)=>{
   if(t.classList.contains('del-btn')){
     const id = t.dataset.id;
     const type = t.dataset.type;
-    if(type === 'turma' && isAdmin){ turmaState.turma = turmaState.turma.filter(i=> i.id !== id); renderAll(); await saveTurma(); }
     if(type === 'venda'){ vendasState.vendas = vendasState.vendas.filter(i=> i.id !== id); renderAll(); await saveVendas(); }
     if(type === 'colega' && isAdmin){
       if(confirm('Remover o cadastro dessa pessoa? As vendas dela serão apagadas (o login dela deixa de funcionar até você cadastrar de novo).')){
@@ -939,7 +854,7 @@ function mostrarApp(){
   document.getElementById('tabsBar').classList.toggle('hidden', !isAdmin);
   document.getElementById('cupBlock').classList.toggle('hidden', !isAdmin);
   document.getElementById('statsAdmin').classList.toggle('hidden', !isAdmin);
-  document.getElementById('statsColega').classList.toggle('hidden', isAdmin);
+  // "statsColega" (Só as suas vendas) agora fica sempre visível, pra admin e colega
   document.getElementById('metaRow').classList.toggle('hidden', !isAdmin);
 
   // se não for admin, força a aba "Minhas vendas" ativa e some com as outras
@@ -972,10 +887,10 @@ onAuthStateChanged(auth, async (user)=>{
   if(isAdmin){
     unsubTurma = onSnapshot(turmaDocRef, (snap)=>{
       applyingRemoteTurma = true;
-      const data = snap.exists() ? snap.data() : { turma: [], meta: 0 };
-      turmaState = { turma: data.turma || [], meta: data.meta || 0 };
+      const data = snap.exists() ? snap.data() : { meta: 0 };
+      turmaState = { meta: data.meta || 0 };
       document.getElementById('metaInput').value = turmaState.meta || '';
-      renderAll();
+      renderStats();
       setSyncBadge('ok');
       applyingRemoteTurma = false;
     }, (err)=>{ console.error(err); setSyncBadge('err'); });
@@ -986,7 +901,7 @@ onAuthStateChanged(auth, async (user)=>{
         if(d.id === user.uid) return; // não lista a própria conta do admin
         colegasState.push({ id: d.id, ...d.data() });
       });
-      renderColegas();
+      renderAll();
     }, (err)=> console.error(err));
   }
 
